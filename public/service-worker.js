@@ -64,7 +64,7 @@ self.addEventListener('activate', (evt) => {
   // CODELAB: Remove previous cached data from disk.
   caches.keys().then((keyList) => {
     return Promise.all(keyList.map((key) => {
-      if (key !== CACHE_NAME) {
+      if (key !== CACHE_NAME && key !== DATA_CACHE_NAME) {
         console.log('[ServiceWorker] Removing old cache', key);
         return caches.delete(key);
       }
@@ -76,7 +76,26 @@ self.addEventListener('activate', (evt) => {
 self.addEventListener('fetch', (evt) => {
   console.log('[ServiceWorker] Fetch', evt.request.url);
   // CODELAB: Add fetch event handler here.
-  if (evt.request.mode !== 'navigate') {
+  if (evt.request.url.includes('/forecast/')) {
+    console.log('[Service Worker] Fetch (data)', evt.request.url);
+    evt.respondWith(
+      caches.open(DATA_CACHE_NAME).then((cache) => {
+        return fetch(evt.request)
+          .then((res) => {
+            // If the response is good, clone the stream of data so that it 
+            // can be put in the cache and also send to the window
+            if (res.status === 200) {
+              cache.put(evt.request.url, res.clone());
+            }
+            // the received data to the requestor
+            return res;
+          })
+          .catch((err) => {
+            // Network request failed, try to get data from the cache
+            return cache.match(evt.request);
+          });
+      })
+    );
     return;
   }
   evt.respondWith(
